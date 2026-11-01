@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pose Tracker - Badminton Cam</title>
+    <!-- โหลดไลบรารี MediaPipe Pose และ TensorFlow / Camera Utils สำเร็จรูป -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-white flex flex-col items-center justify-center min-h-screen p-2">
+
+    <div class="relative w-full max-w-2xl aspect-[9/16] bg-gray-900 rounded-2xl overflow-hidden border border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.4)]">
+        <!-- วิดีโอจากกล้อง -->
+        <video id="input_video" class="absolute inset-0 w-full h-full object-cover -scale-x-100" playsinline></video>
+        <!-- แคนวาสสำหรับวาดโครงกระดูก AI -->
+        <canvas id="output_canvas" class="absolute inset-0 w-full h-full object-cover -scale-x-100"></canvas>
+        
+        <!-- ป้ายบอกสถานะ -->
+        <div class="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-red-500/40 text-xs font-mono text-red-400 flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
+            <span>AI POSE TRACKER ACTIVE</span>
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        function onResults(results) {
+            // ปรับขนาดแคนวาสให้ตรงกับวิดีโอ
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // วาดภาพจากกล้องลงบนแคนวาส
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            // ถ้าตรวจจับเจอโครงกระดูกร่างกายคน
+            if (results.poseLandmarks) {
+                // วาดเส้นข้อต่อ (Skeleton) และจุด (Landmarks) สีแดง-ส้มสไตล์เกม
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#ef4444', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#f59e0b', lineWidth: 2, radius: 4});
+            }
+            canvasCtx.restore();
+        }
+
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        // เปิดกล้องไอแพด/มือถือ (ใช้กล้องหลัง environment)
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({image: videoElement});
+            },
+            facingMode: 'environment',
+            width: 720,
+            height: 1280
+        });
+
+        camera.start().catch(err => {
+            alert("ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการใช้งานกล้อง หรือเปิดผ่าน HTTPS / Localhost");
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
